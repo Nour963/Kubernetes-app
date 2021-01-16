@@ -1,0 +1,269 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: visit-frontend-v1
+  labels:
+    app: visit-frontend
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: visit-frontend
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: visit-frontend
+        version: v1
+    spec:
+      containers:
+        - name: visit-frontend
+          image: nour963/visitor_frontend:1.0
+          imagePullPolicy: Always
+          env:
+            - name: COUNTER_ENDPOINT
+              value: "http://visit-backend:6000"
+          ports:
+            - name: frontend-port
+              containerPort: 5000
+              protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: visit-frontend-v2
+  labels:
+    app: visit-frontend
+    version: v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: visit-frontend
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: visit-frontend
+        version: v2
+    spec:
+      containers:
+        - name: visit-frontend
+          image: nour963/visitor_frontend:2.0
+          imagePullPolicy: Always
+          env:
+            - name: COUNTER_ENDPOINT
+              value: "http://visit-backend:6000"
+          ports:
+            - name: frontend-port
+              containerPort: 5000
+              protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: visit-backend
+  labels:
+    app: visit-backend
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: visit-backend
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: visit-backend
+        version: v1
+    spec:
+      containers:
+        - name: visit-backend
+          image: nour963/visitor_backend:1.0
+          imagePullPolicy: Always
+          ports:
+            - name: backend-port
+              containerPort: 6000
+              protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: visit-backend
+    labels:
+      app: visit-backend
+      service: visit-backend
+spec:
+    selector:
+        app: visit-backend
+    ports:
+        - protocol: TCP
+          port: 6000
+          targetPort: 6000
+          name: tcp
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: visit-frontend
+    labels:
+      app: visit-frontend
+      service: visit-frontend
+spec:
+    selector:
+        app: visit-frontend
+    ports:
+        - protocol: TCP
+          port: 5000
+          targetPort: 5000
+          name: tcp
+---
+#_______________________________________________NGINX APP___________________________________________
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-conf
+data:
+  nginx.conf: |
+    worker_processes 1;
+    events { worker_connections 1024; }
+    http {
+    include /etc/nginx/mime.types;
+    upstream python {
+    server visit-frontend:5000;
+    }
+    server {
+      listen        80;
+      server_name localhost;
+      
+      location / {
+        proxy_pass  http://python;
+        proxy_http_version 1.1;
+             }
+      error_page   500 502 503 504  /50x.html;
+      
+        location = /50x.html {
+            root   /usr/share/nginx/html;
+                            }
+          } 
+        }
+---
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+    version: v1
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+      version: v1
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: nginx
+        version: v1
+    spec:
+      containers:
+      - name: nginx    
+        image: nour963/nginx-visitor
+        ports:
+          - containerPort: 80
+        volumeMounts:
+        - name: nginx-conf
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: nginx-conf   
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  ports:
+  - port: 80
+    name: http
+    targetPort: 80
+  selector:
+    app: nginx
+---
+#________________________________________________GATEWAY___________________________________________________
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: nginx-gateway
+spec:
+  selector:
+    istio: ingressgateway           # use istio prebuilt INgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+#_____________________________________________VIRTUAL SERVICE________________________________________________
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+    name: nginx
+spec:
+    hosts:
+    - "*"
+    gateways:
+    - nginx-gateway
+    http:
+    - route:
+      - destination:
+          host: nginx
+          subset: v1
+          port:
+            number: 80
+---
+#_____________________________________________DESTINATION RULES________________________________________________
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: nginx
+spec:
+  host: nginx
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: visit-backend
+spec:
+  host: visit-backend
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: visit-frontend
+spec:
+  host: visit-frontend
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2

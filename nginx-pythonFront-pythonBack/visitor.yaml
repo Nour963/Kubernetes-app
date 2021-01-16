@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: visit-frontend
+  labels:
+    name: visit-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: visit-frontend
+  template:
+    metadata:
+      labels:
+        app: visit-frontend
+    spec:
+      containers:
+        - name: visit-frontend
+          image: nour963/visitor_frontend:1.0
+          imagePullPolicy: Always
+          env:
+            - name: COUNTER_ENDPOINT
+              value: "http://visit-backend:6000"
+          ports:
+            - name: frontend-port
+              containerPort: 5000
+              protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: visit-backend
+  labels:
+    name: visit-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: visit-backend
+  template:
+    metadata:
+      labels:
+        app: visit-backend
+    spec:
+      containers:
+        - name: visit-backend
+          image: nour963/visitor_backend:1.0
+          imagePullPolicy: Always
+          ports:
+            - name: backend-port
+              containerPort: 6000
+              protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: visit-backend
+spec:
+    selector:
+        app: visit-backend
+    ports:
+        - protocol: TCP
+          port: 6000
+          targetPort: 6000
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: visit-frontend
+spec:
+    selector:
+        app: visit-frontend
+    type: LoadBalancer
+    ports:
+        - protocol: TCP
+          port: 80
+          targetPort: 5000
