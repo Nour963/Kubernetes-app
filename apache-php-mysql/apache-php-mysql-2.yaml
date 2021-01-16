@@ -1,0 +1,167 @@
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+  name: php
+spec:
+  selector:
+    matchLabels:
+      app: php
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: php
+    spec:
+      containers:
+      - name: php
+        image: nour963/php
+        ports:
+          - containerPort: 9000        
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apache-conf
+data:
+    apache.conf: |
+      ServerName localhost
+      LoadModule deflate_module /usr/local/apache2/modules/mod_deflate.so
+      LoadModule proxy_module /usr/local/apache2/modules/mod_proxy.so
+      LoadModule proxy_fcgi_module /usr/local/apache2/modules/mod_proxy_fcgi.so
+      
+      <VirtualHost *:80>
+          # Proxy .php requests to port 9000 of the php-fpm container
+          ProxyPass /http_errors/ !
+          ProxyPassMatch ^/(.*\.php(/.*)?)$ fcgi://php:9000/var/www/html/
+          DocumentRoot /var/www/html/
+          <Directory /var/www/html/>
+              DirectoryIndex index.php
+              Options Indexes FollowSymLinks
+              AllowOverride All
+              Require all granted
+          </Directory>
+          
+          # Send apache logs to stdout and stderr
+          Alias /http_errors/ /var/www/html/
+          ErrorDocument 502 /http_errors/50x.html
+      </VirtualHost>
+---
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+  name: apache
+spec:
+  selector:
+    matchLabels:
+      app: apache
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: apache
+    spec:
+      containers:
+      - name: apache       
+        image: nour963/httpd
+        ports:
+          - containerPort: 80
+        volumeMounts:
+        - name: apache-conf
+          mountPath: /usr/local/apache2/conf/apache.conf
+          subPath: apache.conf
+      volumes:
+        - name: apache-conf
+          configMap:
+            name: apache-conf  
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secrets
+type: Opaque
+stringData:
+  ROOT_PASSWORD: cm9vdA==
+  DATABASE: dGVzdA== 
+  USER: bm91cg== 
+  PASSWORD: aGVsbG8xMjM=  
+---
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+  name: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql      
+        image: mysql:5.7
+        ports:
+          - containerPort: 3306         
+        env:
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                  name: mysql-secrets
+                  key: ROOT_PASSWORD
+          - name: MYSQL_DATABASE
+            valueFrom:
+              secretKeyRef:
+                  name: mysql-secrets
+                  key: DATABASE 
+          - name: MYSQL_USER
+            valueFrom:
+              secretKeyRef:
+                  name: mysql-secrets
+                  key: USER 
+          - name: MYSQL_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                  name: mysql-secrets
+                  key: PASSWORD
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: php
+  labels:
+    app: php
+spec:
+  ports:
+  - port: 9000
+    targetPort: 9000
+  selector:
+    app: php
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: mysql
+    labels:
+      app: mysql
+spec:
+    ports:
+    - port: 3306
+      targetPort: 3306
+    selector:
+      app: mysql
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apache
+  labels:
+    app: apache
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: apache 

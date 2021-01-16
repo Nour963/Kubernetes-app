@@ -1,0 +1,21 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: php
+spec:
+  hosts:
+    - php
+  http:
+  - route:
+    - destination:
+        host: php
+        subset: v1
+      weight: 50
+    - destination:
+        host: php
+        subset: v3
+      weight: 50
+---
+#!!!!!!!!!!!!!!!!!NOT WORKING YET ON ISTIO v1.4 DUE TO UNHANDLED PROTOCOL FCGI!!!!!!!!!!!!!!!!!!!!!! 
+
+#to test: for i in {1..6}; do curl -si $INGRESS_GATEWAY | grep "<h2>"; done

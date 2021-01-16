@@ -1,0 +1,21 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: nodejs
+spec:
+  hosts:
+    - nodejs
+  http:
+    - match:
+      - headers:
+          user-agent:
+            regex: ".*Firefox.*"
+      route:
+      - destination:
+          host: nodejs
+          subset: v1
+    - route:
+      - destination:
+          host: nodejs
+          subset: v2
+

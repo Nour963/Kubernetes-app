@@ -1,0 +1,19 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: go
+spec:
+  hosts:
+    - go
+  http:
+  - route:
+    - destination:
+        host: go
+        subset: v1
+      weight: 50
+    - destination:
+        host: go
+        subset: v2
+      weight: 50
+---
+#to test: for i in {1..6}; do curl -si $INGRESS_GATEWAY | grep "<h2>"; done

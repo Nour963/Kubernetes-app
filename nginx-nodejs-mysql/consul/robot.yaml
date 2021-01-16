@@ -1,0 +1,129 @@
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+  name: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  replicas: 2
+  template:
+    metadata:
+      annotations:
+        "consul.hashicorp.com/connect-inject": "true"
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql      
+        image: nour963/robot-mysql
+        ports:
+        - containerPort: 3306   
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-conf
+data:
+    nginx.conf: |
+        worker_processes 1;
+
+        events { worker_connections 1024; }
+
+        http {
+        include /etc/nginx/mime.types;
+
+        upstream node {
+        server localhost:8080;
+        }
+
+        server {
+
+        listen        80;
+        server_name localhost;
+        
+        location / {
+            proxy_read_timeout 300s;
+            proxy_connect_timeout 75s;
+            proxy_request_buffering off;
+            proxy_buffering off;
+            proxy_pass  http://node;
+
+        }
+
+        error_page   500 502 503 504  /50x.html;
+        
+            location = /50x.html {
+                root   /usr/share/nginx/html;
+                                }
+            } 
+            }
+---
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+  name: nginx
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 2
+  template:
+    metadata:
+      annotations:
+        "consul.hashicorp.com/connect-inject": "true"
+        "consul.hashicorp.com/connect-service-upstreams": "nodejs:8080"
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx    
+        image: nour963/robot-nginx
+        ports:
+          - containerPort: 80
+        volumeMounts:
+        - name: nginx-conf
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: nginx-conf   
+---
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+  name: nodejs
+spec:
+  selector:
+    matchLabels:
+      app: nodejs
+  replicas: 2
+  template:
+    metadata:
+      annotations:
+       "consul.hashicorp.com/connect-inject": "true"
+       "consul.hashicorp.com/connect-service-upstreams": "mysql:3306"
+      labels:
+        app: nodejs
+    spec:
+      containers:
+      - name: nodejs
+        image: nour963/robot-cnodejs
+        ports:
+          - containerPort: 8080 
+---     
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: nginx
+

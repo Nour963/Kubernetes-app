@@ -1,0 +1,29 @@
+#MUST enable Policy enforcement in istio first.
+
+apiVersion: "config.istio.io/v1alpha2"
+kind: handler
+metadata:
+  name: denynginxnode
+spec:
+  compiledAdapter: denier
+  params:
+    status:
+      code: 7
+      message: Nginx Not allowed to NodeJS
+---
+apiVersion: "config.istio.io/v1alpha2"
+kind: instance
+metadata:
+  name: denyrequest
+spec:
+  compiledTemplate: checknothing
+---
+apiVersion: "config.istio.io/v1alpha2"
+kind: rule
+metadata:
+  name: denyreviewsv3
+spec:
+  match: destination.labels["app"] == "nodejs"  && source.labels["app"]=="nginx" && source.labels["version"]=="v1" 
+  actions:
+  - handler: denynginxnode
+    instances: [ denyrequest ]

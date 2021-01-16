@@ -1,0 +1,21 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: php
+spec:
+  hosts:
+    - php
+  http:
+    - match:
+      - headers:
+          user-agent:
+            regex: ".*Chrome.*"
+      route:
+      - destination:
+          host: php
+          subset: v1
+    - route:
+      - destination:
+          host: php
+          subset: v2
+#!!!!!!!!!!!!!!!!!NOT WORKING YET ON ISTIO v1.4 DUE TO UNHANDLED PROTOCOL FCGI!!!!!!!!!!!!!!!!!!!!!! 
